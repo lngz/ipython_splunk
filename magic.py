@@ -11,18 +11,7 @@ import splunklib.results as results
 
 from splunklib.binding import HTTPError
 
-HOST = "localhost"
-PORT = 8089
-USERNAME = "admin"
-PASSWORD = "changeme"
-
-service = client.connect(
-    host=HOST,
-    port=PORT,
-    username=USERNAME,
-    password=PASSWORD)
-
-
+from tabulate import tabulate
 
 
 FLAGS_CREATE = [
@@ -56,6 +45,10 @@ def dslice(value, *args):
             if arg in value: 
                 result[arg] = value[arg]
     return result
+def pretty(response):
+    reader = results.ResultsReader(response)
+    print(tabulate(reader, headers="keys", tablefmt="psql"))
+
 
 
 
@@ -64,6 +57,15 @@ def dslice(value, *args):
 # The class MUST call this class decorator at creation time
 @magics_class
 class SplunkMagics(Magics):
+
+    @line_magic('connect')
+    def connect(self,line):
+        [HOST,PORT,USERNAME,PASSWORD] = line.split(" ")
+        self.service = client.connect(
+                host=HOST,
+                port=PORT,
+                username=USERNAME,
+                password=PASSWORD)
 
     @line_magic('spl')
     @cell_magic('spl')
@@ -75,12 +77,12 @@ class SplunkMagics(Magics):
         kwargs_create = {}
         kwargs_results = {'output_mode': 'csv', 'count': 0}
         try:
-            service.parse(line, parse_only=True)
+            self.service.parse(line, parse_only=True)
         except HTTPError as e:
             print("query '%s' is invalid:\n\t%s" % (line, str(e)), 2)
             return
 
-        job = service.jobs.create(line, **kwargs_create)
+        job = self.service.jobs.create(line, **kwargs_create)
         while True:
             while not job.is_ready():
                 pass
@@ -124,23 +126,21 @@ class SplunkMagics(Magics):
         outputs = []
 
         socket.setdefaulttimeout(None)
-        response = service.jobs.oneshot(line)
-        reader = results.ResultsReader(response)
-        for result in reader:
-            if isinstance(result, dict):
-                outputs.append(result)
+        response = self.service.jobs.oneshot(line)
+
+        pretty(response)
         return outputs
 
     @line_magic('getapp')
     def getapp(self,line):
         apps = []
-        for app in service.apps:
+        for app in self.service.apps:
             apps.append(app.name)
         return apps
 
     @line_magic('createsavedsearch')
     def createsavedsearch(self,line):
-        savedsearches = service.saved_searches
+        savedsearches = self.service.saved_searches
 
         # Create a saved search
         name = "test"
@@ -150,7 +150,7 @@ class SplunkMagics(Magics):
     @line_magic('listsavedsearches')
     def listsavedsearches(self,line):
         result = []
-        for savedsearch in service.saved_searches:
+        for savedsearch in self.service.saved_searches:
             result.append( savedsearch.name )
 
             result.append (savedsearch.content["search"])
