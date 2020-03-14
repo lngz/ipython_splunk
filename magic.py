@@ -128,7 +128,17 @@ class SplunkMagics(Magics):
         socket.setdefaulttimeout(None)
         response = self.service.jobs.oneshot(line)
 
-        pretty(response)
+        # pretty(response)
+        reader = results.ResultsReader(response)
+        # print(tabulate(reader, headers="keys", tablefmt="psql"))
+
+        # reader = results.ResultsReader(response)
+        for result in reader:
+            if isinstance(result, dict):
+                outputs.append(result)
+        print(tabulate(outputs, headers="keys", tablefmt="psql"))
+
+
         return outputs
 
     @line_magic('getapp')
